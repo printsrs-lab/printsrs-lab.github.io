@@ -2061,6 +2061,47 @@ async function renderDone(){
   $("#doneCount") && ($("#doneCount").textContent = String(state.doneTodayCount));
 }
 
+
+/* ========= 利用規約 同意（初回のみ） ========= */
+const TERMS_VERSION = "2026-02-20";
+const TERMS_KEY = "psrs_terms_accepted_v";
+
+function hasAcceptedTerms() {
+  try { return localStorage.getItem(TERMS_KEY) === TERMS_VERSION; } catch(_) { return false; }
+}
+
+function openConsent() {
+  const m = $("#consentModal");
+  if (!m) return;
+  m.classList.remove("hidden");
+  m.setAttribute("aria-hidden","false");
+}
+
+function closeConsent() {
+  const m = $("#consentModal");
+  if (!m) return;
+  m.classList.add("hidden");
+  m.setAttribute("aria-hidden","true");
+}
+
+function requireTermsConsent() {
+  if (hasAcceptedTerms()) return;
+  openConsent();
+}
+
+$("#consentShowTerms")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  openTerms();
+});
+
+$("#consentAccept")?.addEventListener("click", () => {
+  try { localStorage.setItem(TERMS_KEY, TERMS_VERSION); } catch(_) {}
+  closeConsent();
+});
+
+// 初回（規約未同意）ならブロック
+requireTermsConsent();
+
 /* ========= 印刷（単体/まとめ, A4/A3, Pro/Free透かし） ========= */
 
 const printSheet = $("#printSheet");
