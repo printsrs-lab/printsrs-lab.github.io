@@ -351,6 +351,31 @@
   </div>
 
 
+
+  <!-- 利用規約 同意（初回のみ） -->
+  <div id="consentModal" class="modal hidden" aria-hidden="true">
+    <div class="modalBackdrop"></div>
+    <div class="modalBody modalBody--doc">
+      <div class="row space wrap">
+        <div>
+          <div class="sheetTitle">利用規約への同意</div>
+          <div class="muted small">本サービスを利用するには同意が必要です</div>
+        </div>
+      </div>
+
+      <div class="doc">
+        <div class="warnBox">
+          本サービス（無料版・Pro版）を利用した時点で、利用規約に同意したものとみなします。<br>
+          内容をご確認のうえ「同意して利用する」を押してください。
+        </div>
+        <div class="row gap wrap">
+          <button class="btn" id="consentShowTerms">利用規約を読む</button>
+          <button class="btn primary" id="consentAccept">同意して利用する</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 利用規約（アプリ内ビュー） -->
   <div id="termsModal" class="modal hidden" aria-hidden="true">
     <div class="modalBackdrop" id="termsBackdrop"></div>
@@ -364,6 +389,8 @@
       </div>
 
       <div class="doc">
+
+<div class="termsPreamble"><b>第0条（規約への同意）</b><br>本サービスを利用した時点で、本利用規約に同意したものとみなします。無料版・Pro版を問わず、本規約が適用されます。</div>
 <div class="warnBox">
   <b>注意（効果あり）</b><br>
   Pro版は購入識別番号（uid）で管理され、印刷物に識別番号が表示される場合があります。<br>
