@@ -11,11 +11,11 @@
   <header class="topbar">
     <div class="topbar__left">
       <div class="brand">Print SRS Lite</div>
-</div>
-    <nav class="topbar__nav">
+    </div>
+    <nav class="topbar__nav" aria-label="Main">
       <button class="btn" data-nav="home">ホーム</button>
-      <button class="btn" data-nav="add">プリント追加</button>
-      <button class="btn primary" data-nav="today">今日の復習</button>
+      <button class="btn" data-nav="add">追加</button>
+      <button class="btn primary" data-nav="today">復習</button>
       <button class="btn" id="btnOpenTutorial">チュートリアル</button>
       <button class="btn" id="btnOpenTerms">利用規約</button>
     </nav>
@@ -84,7 +84,16 @@
           </label>
 
           <label>画像ファイル（JPEG/PNG/HEIC）
+            <!-- Proのみ: 複数選択で「同じプリント名の中に複数枚（複数ページ）」を一括取り込み -->
             <input id="addFile" type="file" accept="image/*,.heic,.heif" />
+          </label>
+
+          <label class="row wrap" style="gap:10px; align-items:flex-start;">
+            <input id="addHiRes" type="checkbox" />
+            <div>
+              <div style="font-weight:800;">文字くっきり（高画質で保存）</div>
+              <div class="muted small">国語など文字が多いプリント向け。容量は増えます。</div>
+            </div>
           </label>
 
           <div class="row wrap">
@@ -110,6 +119,17 @@
 
         <div class="row wrap">
           <button class="btn done" id="btnEditDone">✅ 編集完了</button>
+        </div>
+      </div>
+
+      <!-- 複数ページ（Pro）: 編集対象のページ切替 -->
+      <div class="row space wrap" id="pageNavBar">
+        <div class="muted">
+          ページ：<span id="pageNow">1</span> / <span id="pageTotal">1</span>
+        </div>
+        <div class="row wrap">
+          <button class="btn" id="btnPrevPage">◀ 前</button>
+          <button class="btn" id="btnNextPage">次 ▶</button>
         </div>
       </div>
 
@@ -334,6 +354,15 @@
           <div class="muted small">黒塗り＋Qラベルを見ながら選択できます（複数OK）</div>
         </div>
         <div class="pill">選択：<span id="pickerSelCount">0</span></div>
+      </div>
+
+      <!-- 複数ページ（Pro）: ピッカー内のページ切替 -->
+      <div class="row space wrap" style="margin-top:10px;" id="pickerPageNav">
+        <div class="muted">ページ：<span id="pickerPageNow">1</span> / <span id="pickerPageTotal">1</span></div>
+        <div class="row wrap">
+          <button class="btn" id="btnPickerPrevPage">◀ 前</button>
+          <button class="btn" id="btnPickerNextPage">次 ▶</button>
+        </div>
       </div>
 
       <div id="pickerStage" class="stage" style="margin-top:10px;">
