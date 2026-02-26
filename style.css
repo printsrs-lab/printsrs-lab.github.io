@@ -479,3 +479,64 @@ canvas{width:100%; height:100%; display:block; touch-action:none;}
 
 /* Terms consent */
 .termsPreamble{margin:10px 0 14px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.10);line-height:1.5}
+
+
+/* ===== Add view: PRO badges & camera modal ===== */
+.badge{
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1.2;
+  border: 1px solid rgba(0,0,0,.18);
+  background: rgba(0,0,0,.04);
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.badge.pro{
+  font-weight: 700;
+}
+
+/* Simple modal card (reuse existing .modal positioning) */
+#cameraModal.modal{
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  z-index: 9999;
+  background: rgba(0,0,0,.45);
+}
+#cameraModal.hidden{ display: none; }
+
+#cameraModal .modalCard{
+  width: min(740px, 100%);
+  background: #fff;
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: var(--shadow);
+}
+#cameraModal .modalTitle{
+  font-weight: 800;
+  font-size: 18px;
+}
+#cameraModal .cameraStage{
+  width: 100%;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #000;
+  margin: 10px 0;
+}
+#cameraVideo{
+  width: 100%;
+  height: auto;
+  max-height: 62vh;
+  display: block;
+}
+
+/* Make buttons easier on mobile */
+@media (max-width: 560px){
+  #view-add .btn{ padding: 12px 14px; }
+  #cameraModal .modalCard{ padding: 12px; }
+}
