@@ -43,6 +43,28 @@ body{
 .container{max-width:1200px; margin:0 auto; padding:16px;}
 .view h2{margin:10px 0 10px}
 
+/* iPhoneなど：下部ナビにする（親指で押しやすく） */
+@media (max-width: 720px){
+  body{ padding-bottom: 74px; }
+  .topbar{ position: sticky; top:0; }
+  .topbar__nav{
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    padding: 10px;
+    background: rgba(11,12,16,.96);
+    border-top: 1px solid var(--line);
+    z-index: 2500;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+  .topbar__nav .btn{
+    flex: 1;
+    text-align: center;
+    padding: 10px 8px;
+    border-radius: 14px;
+  }
+}
+
 .card{
   background:var(--panel);
   border:1px solid var(--line);
@@ -133,6 +155,14 @@ input, select{
   position:relative;
 }
 canvas{width:100%; height:100%; display:block; touch-action:none;}
+
+@media (max-width: 720px){
+  #stage, #reviewStage, #pickerStage{
+    height: 62vh;
+    min-height: 360px;
+  }
+  .btn{ padding: 10px 12px; }
+}
 
 .footer{padding:18px; border-top:1px solid var(--line); text-align:center;}
 .bullets{margin:8px 0 0 18px; padding:0}
@@ -352,6 +382,14 @@ canvas{width:100%; height:100%; display:block; touch-action:none;}
   color: rgba(233,238,246,0.85);
   user-select: none;
   pointer-events: none;
+}
+
+/* シート/モーダル表示中は、右下バッジが決定ボタンと重ならないよう非表示 */
+body.modal-open .licensedBadge{ display:none !important; }
+
+/* ページ切替バー（編集/ピッカー） */
+#pageNavBar, #pickerPageNav{
+  margin: 10px 0 12px;
 }
 
 /* Doc modal */
