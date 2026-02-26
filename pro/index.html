@@ -26,7 +26,6 @@
 
   <!-- Pro: uid無し時の案内バナー -->
   <div id="proGateBanner" class="proGate hidden" aria-hidden="true"></div>
-  <div id="licensedBadge" class="licensedBadge hidden" aria-hidden="true"></div>
 
   <main class="container">
 
@@ -133,7 +132,7 @@
         </div>
 
         <div class="row wrap">
-          <button class="btn done" id="btnEditDone">✅ 編集完了</button>
+          
         </div>
       </div>
 
@@ -195,6 +194,11 @@
 
           <div id="stage" class="stage">
             <canvas id="canvas" width="800" height="600"></canvas>
+          </div>
+
+
+          <div class="editDoneBar">
+            <button class="btn done big" id="btnEditDone">✅ 編集完了</button>
           </div>
 
           <div class="muted small">
@@ -474,7 +478,12 @@
   </div>
 
   <!-- 印刷用iframe（ポップアップ回避） -->
-  <iframe id="printFrame" class="hidden"></iframe>  <!-- Pro案内 / フォルダ管理 / 連続撮影 -->
+  <iframe id="printFrame" class="hidden"></iframe>
+
+  <script src="./app.js?v=20260226-fix4"></script>
+<script src="pro_uid_guard.js"></script>
+
+  <!-- Pro案内 / フォルダ管理 / 連続撮影 -->
   <div id="proModal" class="modal hidden" aria-hidden="true">
     <div class="modalBackdrop" data-close="pro"></div>
     <div class="modalBody">
@@ -505,7 +514,7 @@
       </div>
 
       <div class="row wrap" style="margin-top:10px;">
-        <input id="newFolderName" type="text" class="uiInput" placeholder="新しいフォルダ名（例：ももか/かんた/宿題/テスト対策 など）" />
+        <input id="newFolderName" type="text" class="uiInput" placeholder="新しいフォルダ名（例：６年生/兄/宿題/テスト対策 など）" />
         <button id="btnCreateFolder" class="btn primary">追加</button>
       </div>
 
@@ -540,11 +549,6 @@
       </div>
     </div>
   </div>
-
-
-  <!-- scripts (NOTE: put AFTER modals so Safari can bind button handlers) -->
-  <script src="./app.js?v=20260226-restore2"></script>
-  <script src="pro_uid_guard.js"></script>
 
 </body>
 </html>
