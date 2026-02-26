@@ -103,6 +103,11 @@ function escapeHtml(s) {
     "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
   }[m]));
 }
+function escapeAttr(s){
+  // attribute value escape (same policy as HTML)
+  return escapeHtml(s);
+}
+
 function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
 function clamp01(v){ return clamp(v, 0, 1); }
 function toDateStr(ms){ return new Date(ms).toLocaleString(); }
@@ -434,7 +439,7 @@ function subjectClass(s){
 
 /* ========= IndexedDB ========= */
 const DB_NAME = "print_srs_lite_pro_db";
-const DB_VER = 3;
+const DB_VER = 4;
 let dbp = null;
 
 function openDB(){
@@ -2719,7 +2724,7 @@ $("#btnBackup")?.addEventListener("click", async () => {
     meta: {
       app: "Print SRS Lite Pro",
       exportedAt: now(),
-      version: "20260219-proprint",
+      version: "20260226-restore1",
       db: { name: DB_NAME, ver: DB_VER },
     },
     data: {
