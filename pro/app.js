@@ -412,7 +412,10 @@ function subjectClass(s){
 
 /* ========= IndexedDB ========= */
 const DB_NAME = "print_srs_lite_pro_db";
-const DB_VER = 2;
+// NOTE: IndexedDB does not allow downgrades. If a user already has DB v3 created
+// (from a previous build), opening with v2 causes VersionError.
+// We bump to v4 to ensure forward-only upgrades.
+const DB_VER = 4;
 let dbp = null;
 
 function openDB(){
@@ -2505,7 +2508,7 @@ $("#btnBackup")?.addEventListener("click", async () => {
     meta: {
       app: "Print SRS Lite Pro",
       exportedAt: now(),
-      version: "20260219-proprint",
+      version: "20260226-fix3",
       db: { name: DB_NAME, ver: DB_VER },
     },
     data: {
