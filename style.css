@@ -306,6 +306,8 @@ canvas{width:100%; height:100%; display:block; touch-action:none;}
   position:absolute;
   inset:0;
   background: rgba(0,0,0,0.62);
+  /* SafariでDOM順によってはBackdropが前面に来てボタンが押せなくなるため */
+  z-index: 0;
 }
 .modalBody{
   position:absolute;
@@ -318,6 +320,39 @@ canvas{width:100%; height:100%; display:block; touch-action:none;}
   border-radius: 18px;
   padding: 14px;
   box-shadow: var(--shadow);
+  z-index: 1;
+}
+
+/* ===== iOS Safari: 入力/セレクトの視認性を強制 ===== */
+.modalBody input,
+.modalBody select,
+.modalBody textarea{
+  color: rgba(233,238,246,0.95) !important;
+  -webkit-text-fill-color: rgba(233,238,246,0.95) !important;
+  background: rgba(255,255,255,0.06) !important;
+  border: 1px solid rgba(255,255,255,0.16) !important;
+}
+
+/* ホームの検索/絞り込み（白い小ボックスが見えない問題対策） */
+select,
+input[type="text"],
+input[type="search"],
+input[type="number"],
+input[type="email"],
+input[type="url"]{
+  color: rgba(233,238,246,0.95);
+  -webkit-text-fill-color: rgba(233,238,246,0.95);
+}
+
+select{
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.16);
+}
+
+/* iOSの選択肢メニューの可読性 */
+select option{
+  background: #0c1018;
+  color: rgba(233,238,246,0.95);
 }
 
 /* Pro: uid無し案内バナー（控えめ） */
@@ -479,147 +514,3 @@ canvas{width:100%; height:100%; display:block; touch-action:none;}
 
 /* Terms consent */
 .termsPreamble{margin:10px 0 14px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.10);line-height:1.5}
-
-
-/* ===== UI inputs (home filters / folder) ===== */
-.uiInput{
-  padding:10px 12px;
-  border:1px solid rgba(0,0,0,.18);
-  border-radius:10px;
-  min-width: 220px;
-  font-size:16px;
-}
-.uiSelect{
-  padding:10px 12px;
-  border:1px solid rgba(0,0,0,.18);
-  border-radius:10px;
-  font-size:16px;
-  background:#fff;
-}
-.grow{ flex: 1 1 auto; }
-
-/* ===== Camera modal (burst) ===== */
-.modalBody--camera{
-  padding: 14px;
-}
-.cameraTop{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  padding:10px 12px;
-  border-radius:14px;
-  background: rgba(0,0,0,.86);
-  color:#fff;
-}
-.cameraTitle{
-  font-weight:700;
-  letter-spacing:.2px;
-}
-.cameraBadge{
-  padding:6px 10px;
-  border-radius:999px;
-  background: rgba(255,255,255,.18);
-  border:1px solid rgba(255,255,255,.22);
-  font-weight:700;
-  white-space:nowrap;
-}
-.cameraStage{
-  margin-top:12px;
-  border-radius:14px;
-  overflow:hidden;
-  background:#000;
-  position:relative;
-}
-#cameraVideo{
-  width:100%;
-  height: min(62vh, 520px);
-  object-fit: contain;
-  background:#000;
-  display:block;
-}
-.cameraHint{
-  position:absolute;
-  left:10px;
-  right:10px;
-  bottom:10px;
-  padding:10px 12px;
-  border-radius:12px;
-  background: rgba(0,0,0,.72);
-  color:#fff;
-  font-size:13px;
-  line-height:1.35;
-}
-.cameraActions{
-  display:flex;
-  gap:10px;
-  flex-wrap:wrap;
-  justify-content:space-between;
-  margin-top:12px;
-}
-.cameraBtn{
-  flex: 1 1 180px;
-  min-height:44px;
-  font-weight:700;
-}
-
-
-/* ====== iOS/Safari: modal/select/input contrast boost ====== */
-.sheet, .modal {
-  color: #111;
-}
-.sheet .uiInput, .sheet select, .sheet textarea,
-.modal .uiInput, .modal select, .modal textarea {
-  color: #111 !important;
-  -webkit-text-fill-color: #111 !important;
-  font-weight: 600;
-}
-.sheet .uiInput::placeholder, .modal .uiInput::placeholder {
-  color: #666 !important;
-  -webkit-text-fill-color: #666 !important;
-  font-weight: 500;
-}
-.sheet .muted, .modal .muted {
-  color: #333 !important;
-}
-
-/* Licensed ID inline under title (avoid overlay collisions) */
-.licensedInline{
-  font-size: 12px;
-  line-height: 1.2;
-  color: rgba(255,255,255,.75);
-  margin-top: 2px;
-}
-
-/* Edit Done button: large & under photo */
-.editDoneBar{
-  margin-top: 10px;
-  display: flex;
-  justify-content: center;
-}
-.btn.done.big{
-  padding: 14px 18px;
-  font-size: 16px;
-  border-radius: 14px;
-  min-width: 220px;
-}
-
-/* Page tabs (edit) */
-.pageTabs{
-  display:flex;
-  gap:8px;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
-}
-.pageTabs .ptab{
-  padding: 8px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(0,0,0,.12);
-  background: #fff;
-  color: #111;
-  font-weight: 700;
-}
-.pageTabs .ptab.active{
-  border-color: rgba(63,124,255,.8);
-  box-shadow: 0 0 0 2px rgba(63,124,255,.15);
-}
