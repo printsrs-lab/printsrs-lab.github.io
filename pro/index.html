@@ -474,12 +474,7 @@
   </div>
 
   <!-- 印刷用iframe（ポップアップ回避） -->
-  <iframe id="printFrame" class="hidden"></iframe>
-
-  <script src="./app.js?v=20260226-restore1"></script>
-<script src="pro_uid_guard.js"></script>
-
-  <!-- Pro案内 / フォルダ管理 / 連続撮影 -->
+  <iframe id="printFrame" class="hidden"></iframe>  <!-- Pro案内 / フォルダ管理 / 連続撮影 -->
   <div id="proModal" class="modal hidden" aria-hidden="true">
     <div class="modalBackdrop" data-close="pro"></div>
     <div class="modalBody">
@@ -545,6 +540,11 @@
       </div>
     </div>
   </div>
+
+
+  <!-- scripts (NOTE: put AFTER modals so Safari can bind button handlers) -->
+  <script src="./app.js?v=20260226-restore2"></script>
+  <script src="pro_uid_guard.js"></script>
 
 </body>
 </html>
