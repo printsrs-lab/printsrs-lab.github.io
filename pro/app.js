@@ -10,9 +10,6 @@
 const CFG = {
   maxW: 1600,
   jpegQ: 0.82,
-  // 文字くっきり（高画質）
-  maxW_HIRES: 2600,
-  jpegQ_HIRES: 0.95,
   longPressMs: 350,
   toastMs: 2500,
 };
@@ -173,6 +170,32 @@ function renderLicensedBadge(){
   }
 }
 
+
+/* ========= Pro only sheet (print と同じ雰囲気の表示) ========= */
+function openProOnlySheet({ title="Pro限定", sub="この機能はProのみです", body="" } = {}){
+  const sheet = $("#proOnlySheet");
+  if (!sheet) {
+    // fallback
+    alert(`${title}\n\n${body}`);
+    return;
+  }
+  $("#proOnlyTitle") && ($("#proOnlyTitle").textContent = title);
+  $("#proOnlySub") && ($("#proOnlySub").textContent = sub);
+  $("#proOnlyBody") && ($("#proOnlyBody").innerHTML = body);
+  sheet.classList.remove("hidden");
+  sheet.setAttribute("aria-hidden","false");
+}
+function closeProOnlySheet(){
+  const sheet = $("#proOnlySheet");
+  if (!sheet) return;
+  sheet.classList.add("hidden");
+  sheet.setAttribute("aria-hidden","true");
+}
+$("#proOnlyClose")?.addEventListener("click", closeProOnlySheet);
+$("#proOnlyOk")?.addEventListener("click", closeProOnlySheet);
+$("#proOnlyBackdrop")?.addEventListener("click", closeProOnlySheet);
+
+
 /* ========= チュートリアル（スポットライト方式 / 画面別） ========= */
 const TOUR_SETS = {
   home: [
@@ -191,10 +214,11 @@ const TOUR_SETS = {
     { sel: '[data-nav="home"]',  title: "⑤ ホームへ戻る", body: "戻って一覧を確認できます。バックアップ/復元はホーム右上です。" },
   ],
   edit: [
-    { sel: '#btnNewGroup',       title: "① 新規Q", body: "Q（復習単位）を追加します。QごとにSRSが進みます。" },
-    { sel: '#stage',             title: "② 黒塗りを作る", body: "プリント上でドラッグすると黒塗り（マスク）を追加できます。消したい文字も隠せます。" },
-    { sel: '#btnRenameGroup',    title: "③ Q名変更", body: "Qのラベルを『問5』『単語②』などに変更できます。" },
-    { sel: '#btnEditDone',       title: "④ 編集完了", body: "編集を終えたらここ。作ったQは「今日の復習」に出ます。" },
+    { sel: '#editPageNav',         title: "① 複数ページ（Pro）", body: "Proで複数枚を1回で取り込んだ場合、ここでページを切り替えて編集できます。Qはページごとに作れます。" },
+    { sel: '#btnNewGroup',       title: "② 新規Q", body: "Q（復習単位）を追加します。QごとにSRSが進みます。" },
+    { sel: '#stage',             title: "③ 黒塗りを作る", body: "プリント上でドラッグすると黒塗り（マスク）を追加できます。消したい文字も隠せます。" },
+    { sel: '#btnRenameGroup',    title: "④ Q名変更", body: "Qのラベルを『問5』『単語②』などに変更できます。" },
+    { sel: '#btnEditDone',       title: "⑤ 編集完了", body: "編集を終えたらここ。作ったQは「今日の復習」に出ます。" },
   ],
   today: [
     { sel: '#btnTodayFilter',    title: "① 教科で絞り込み", body: "教科ごとに復習を絞り込めます。" },
@@ -531,13 +555,8 @@ async function fileToBitmap(file){
   }
   return await createImageBitmap(file);
 }
-async function compressBitmapToJpegBlob(bitmap, opt){
-  // 文字プリント用：高画質モード（iPhone写真の圧縮で文字が潰れる問題の対策）
-  const hiRes = !!opt?.hiRes;
-  const maxW = hiRes ? (CFG.maxW_HIRES || 2600) : CFG.maxW;
-  const jpegQ = hiRes ? (CFG.jpegQ_HIRES || 0.95) : CFG.jpegQ;
-
-  const scale = Math.min(1, maxW / bitmap.width);
+async function compressBitmapToJpegBlob(bitmap){
+  const scale = Math.min(1, CFG.maxW / bitmap.width);
   const w = Math.round(bitmap.width * scale);
   const h = Math.round(bitmap.height * scale);
 
@@ -546,7 +565,7 @@ async function compressBitmapToJpegBlob(bitmap, opt){
   const cctx = c.getContext("2d");
   cctx.drawImage(bitmap, 0, 0, w, h);
 
-  const blob = await new Promise((res) => c.toBlob(res, "image/jpeg", jpegQ));
+  const blob = await new Promise((res) => c.toBlob(res, "image/jpeg", CFG.jpegQ));
   return { blob, width: w, height: h };
 }
 
@@ -557,6 +576,11 @@ const state = {
   currentGroupId: null,
   selectedMaskIds: new Set(),
   selectedPrintIds: new Set(),
+
+  // multi-page support
+  editPageIndex: 0,
+  pickerPrintId: null,
+  pickerPageIndex: 0,
 
   zoom: 1,
   panX: 0,
@@ -580,16 +604,12 @@ const state = {
     open: false,
     printId: null,
     page: null,
-    pageIndex: 0,
     bitmap: null,
     zoom: 1,
     panX: 0,
     panY: 0,
     selectedGroupIds: new Set(),
   },
-
-  // EDIT：複数ページ（Pro）
-  editPageIndex: 0,
 
   // 印刷設定
   print: {
@@ -599,11 +619,6 @@ const state = {
     orientation: "portrait"// "portrait" | "landscape"
   }
 };
-
-function setModalOpen(on){
-  // 右下Licensedバッジがシートの「決定」ボタンと重なるのを回避
-  document.body.classList.toggle("modal-open", !!on);
-}
 
 let cache = { prints:[], pages:[], groups:[], masks:[], srs:[], reviews:[], skips:[], ui:[] };
 
@@ -1002,7 +1017,6 @@ function openSubjectSheet(ctx){
 
   subjectSheet?.classList.remove("hidden");
   subjectSheet?.setAttribute("aria-hidden", "false");
-  setModalOpen(true);
 }
 function closeSubjectSheet(){
   subjectSheet?.classList.add("hidden");
@@ -1010,7 +1024,6 @@ function closeSubjectSheet(){
   subjectSheetCtx = null;
   if (subjectOtherInput) subjectOtherInput.value = "";
   if (subjectOtherWrap) subjectOtherWrap.classList.add("hidden");
-  setModalOpen(false);
 }
 $("#subjectSheetClose")?.addEventListener("click", () => {
   subjectSheetCtx?.onCancel?.();
@@ -1053,23 +1066,84 @@ $("#subjectSheetOk")?.addEventListener("click", () => {
 });
 
 /* ========= ADD ========= */
+let addSources = []; // File[] or Blob[]
 function renderAdd(){
   show("#view-add");
+  addSources = [];
   $("#addStatus") && ($("#addStatus").textContent = "");
   $("#addTitle") && ($("#addTitle").value = `プリント ${new Date().toLocaleDateString()}`);
   $("#addSubject") && ($("#addSubject").value = "算数");
-  const f = $("#addFile");
-  if (f){
-    f.value = "";
-    // Proのみ：複数選択可能（同一プリント内に複数ページ）
-    f.multiple = !!PRO.enabled;
-  }
-  // 文字くっきり：前回の設定を復元（無ければOFF）
-  try{
-    const saved = localStorage.getItem("ps_add_hires");
-    $("#addHiRes") && ($("#addHiRes").checked = saved === "1");
-  }catch{}
+  $("#addFile") && ($("#addFile").value = "");
+  $("#addCamera") && ($("#addCamera").value = "");
 }
+
+/* Pro upsell: multi import */
+function showProUpsellForMultiImport(){
+  const body = `
+<div class="note">
+  <b>複数ページを「1回で」取り込む（ファイル複数選択 / 連続撮影）</b> は <b>Pro限定</b> です。
+</div>
+<ul class="muted small bullets">
+  <li>無料版：1枚ずつ取り込み（編集・復習・単体印刷）は使えます</li>
+  <li>Pro：複数ページ取り込み + まとめ印刷 + 透かしなし</li>
+</ul>`;
+  openProOnlySheet({ title:"Pro限定：複数ページ取り込み", sub:"無料版は1枚ずつ取り込みできます", body });
+}
+
+async function sourceToBitmap(src){
+  if (src instanceof File) return await fileToBitmap(src);
+  // Blob
+  return await createImageBitmap(src);
+}
+
+async function createPrintWithPages({ title, subject, sources }){
+  if (!sources || sources.length === 0) {
+    $("#addStatus") && ($("#addStatus").textContent = "画像を選んでください。");
+    return;
+  }
+  if (sources.length > 1 && !PRO.enabled) {
+    $("#addStatus") && ($("#addStatus").textContent = "複数取り込みはPro限定です（無料版は1枚ずつ）。");
+    showProUpsellForMultiImport();
+    return;
+  }
+
+  $("#addStatus") && ($("#addStatus").textContent = "取り込み中（変換/圧縮）...");
+
+  const printId = uid();
+  const t = now();
+  const print = { id: printId, title, subject, createdAt: t };
+
+  const pages = [];
+  const groups = [];
+  const srsList = [];
+
+  for (let i = 0; i < sources.length; i++) {
+    const bitmap = await sourceToBitmap(sources[i]);
+    const { blob, width, height } = await compressBitmapToJpegBlob(bitmap);
+
+    const pageId = uid();
+    pages.push({ id: pageId, printId, pageIndex: i, image: blob, width, height });
+
+    const groupId = uid();
+    groups.push({ id: groupId, printId, pageIndex: i, label: "Q1", orderIndex: 0, isActive: true, createdAt: t });
+    srsList.push(initSrsState(groupId));
+  }
+
+  await tx(["prints","pages","groups","srs"], "readwrite", (s) => {
+    s.prints.put(print);
+    pages.forEach(p => s.pages.put(p));
+    groups.forEach(g => s.groups.put(g));
+    srsList.forEach(x => s.srs.put(x));
+  });
+
+  state.currentPrintId = printId;
+  state.currentGroupId = groups[0]?.id || null;
+  state.selectedMaskIds.clear();
+
+  $("#addStatus") && ($("#addStatus").textContent = "追加しました。編集画面へ移動します…");
+  await nav("edit");
+}
+
 $("#btnPickAddSubject")?.addEventListener("click", async () => {
   await refreshCache();
   const subjects = getAllSubjectsFromPrints();
@@ -1089,60 +1163,142 @@ $("#btnPickAddSubject")?.addEventListener("click", async () => {
   });
 });
 
+/* UI buttons */
+$("#btnPickFiles")?.addEventListener("click", () => {
+  $("#addFile")?.click();
+});
+$("#btnCameraSingle")?.addEventListener("click", () => {
+  $("#addCamera")?.click();
+});
+$("#btnCameraMulti")?.addEventListener("click", async () => {
+  if (!PRO.enabled) {
+    showProUpsellForMultiImport();
+    return;
+  }
+  await openCameraModal();
+});
+
+/* file pickers */
+$("#addFile")?.addEventListener("change", () => {
+  const files = $("#addFile")?.files ? Array.from($("#addFile").files) : [];
+  addSources = files;
+  if (files.length > 1 && !PRO.enabled) {
+    $("#addStatus") && ($("#addStatus").textContent = "複数選択はPro限定です（無料版は1枚だけ取り込み）。");
+    showProUpsellForMultiImport();
+  } else {
+    $("#addStatus") && ($("#addStatus").textContent = files.length ? `選択：${files.length}枚` : "");
+  }
+});
+$("#addCamera")?.addEventListener("change", () => {
+  const file = $("#addCamera")?.files && $("#addCamera").files[0];
+  addSources = file ? [file] : [];
+  $("#addStatus") && ($("#addStatus").textContent = file ? "撮影：1枚" : "");
+});
+
 $("#btnCreatePrint")?.addEventListener("click", async () => {
   const title = ($("#addTitle")?.value || "").trim() || `プリント ${new Date().toLocaleDateString()}`;
   const subject = normSubject($("#addSubject")?.value || "その他");
-  const files = Array.from($("#addFile")?.files || []);
-  if (files.length === 0) { $("#addStatus") && ($("#addStatus").textContent = "画像ファイルを選んでください。"); return; }
-  if (files.length > 1 && !PRO.enabled) {
-    $("#addStatus") && ($("#addStatus").textContent = "複数枚の一括取り込みはProのみです（1枚だけ選んでください）。");
+  try {
+    await createPrintWithPages({ title, subject, sources: addSources });
+  } catch (err) {
+    console.error(err);
+    $("#addStatus") && ($("#addStatus").textContent = `失敗：${err.message || err}`);
+  }
+});
+
+/* ========= Camera Modal (Pro multi-shot) ========= */
+let cameraStream = null;
+let cameraBlobs = [];
+
+function setCameraModalOpen(open){
+  const m = $("#cameraModal");
+  if (!m) return;
+  if (open) {
+    m.classList.remove("hidden");
+    m.setAttribute("aria-hidden","false");
+  } else {
+    m.classList.add("hidden");
+    m.setAttribute("aria-hidden","true");
+  }
+}
+
+function stopCamera(){
+  try {
+    if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());
+  } catch {}
+  cameraStream = null;
+  const v = $("#cameraVideo");
+  if (v) v.srcObject = null;
+}
+
+function updateCameraSub(){
+  $("#cameraSub") && ($("#cameraSub").textContent = `撮影した枚数：${cameraBlobs.length}`);
+}
+
+async function openCameraModal(){
+  cameraBlobs = [];
+  updateCameraSub();
+  $("#cameraStatus") && ($("#cameraStatus").textContent = "");
+  setCameraModalOpen(true);
+
+  const v = $("#cameraVideo");
+  if (!v) return;
+
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" } },
+      audio: false
+    });
+    v.srcObject = cameraStream;
+    await v.play();
+  } catch (err) {
+    console.error(err);
+    $("#cameraStatus") && ($("#cameraStatus").textContent = "カメラを起動できませんでした。代わりに「写真を撮る（1枚）」をご利用ください。");
+    stopCamera();
+  }
+}
+
+$("#btnCameraClose")?.addEventListener("click", () => {
+  setCameraModalOpen(false);
+  stopCamera();
+});
+
+$("#btnCameraShot")?.addEventListener("click", async () => {
+  const v = $("#cameraVideo");
+  if (!v || !cameraStream) return;
+
+  const w = v.videoWidth || 1280;
+  const h = v.videoHeight || 720;
+
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const cctx = c.getContext("2d");
+  cctx.drawImage(v, 0, 0, w, h);
+
+  const blob = await new Promise(res => c.toBlob(res, "image/jpeg", 0.95));
+  if (!blob) return;
+  cameraBlobs.push(blob);
+  updateCameraSub();
+  $("#cameraStatus") && ($("#cameraStatus").textContent = `追加しました（合計 ${cameraBlobs.length}枚）`);
+});
+
+$("#btnCameraDone")?.addEventListener("click", async () => {
+  if (!PRO.enabled) {
+    showProUpsellForMultiImport();
+    return;
+  }
+  if (cameraBlobs.length === 0) {
+    $("#cameraStatus") && ($("#cameraStatus").textContent = "まず1枚撮影してください。");
     return;
   }
 
-  const hiRes = !!$("#addHiRes")?.checked;
-  try{ localStorage.setItem("ps_add_hires", hiRes ? "1" : "0"); }catch{}
+  const title = ($("#addTitle")?.value || "").trim() || `プリント ${new Date().toLocaleDateString()}`;
+  const subject = normSubject($("#addSubject")?.value || "その他");
 
-  $("#addStatus") && ($("#addStatus").textContent = files.length > 1
-    ? `取り込み中（${files.length}枚 / 変換・圧縮）...`
-    : "取り込み中（変換/圧縮）..."
-  );
   try {
-    const printId = uid();
-    const t = now();
-    const print = { id: printId, title, subject, createdAt: t };
-
-    // pages
-    const pages = [];
-    for (let i = 0; i < files.length; i++){
-      const bmp = await fileToBitmap(files[i]);
-      const { blob, width, height } = await compressBitmapToJpegBlob(bmp, { hiRes });
-      pages.push({ id: uid(), printId, pageIndex: i, image: blob, width, height });
-    }
-
-    // groups: pageごとに最低1つ（Q1）を作成
-    const groups = [];
-    const srsArr = [];
-    for (let i = 0; i < pages.length; i++){
-      const gid = uid();
-      const g = { id: gid, printId, pageIndex: i, label: "Q1", orderIndex: 0, isActive: true, createdAt: t };
-      groups.push(g);
-      srsArr.push(initSrsState(gid));
-    }
-
-    await tx(["prints","pages","groups","srs"], "readwrite", (s) => {
-      s.prints.put(print);
-      pages.forEach(p => s.pages.put(p));
-      groups.forEach(g => s.groups.put(g));
-      srsArr.forEach(x => s.srs.put(x));
-    });
-
-    state.currentPrintId = printId;
-    state.editPageIndex = 0;
-    state.currentGroupId = groups.find(g => g.pageIndex === 0)?.id || groups[0]?.id || null;
-    state.selectedMaskIds.clear();
-
-    $("#addStatus") && ($("#addStatus").textContent = "追加しました。編集画面へ移動します…");
-    await nav("edit");
+    setCameraModalOpen(false);
+    stopCamera();
+    await createPrintWithPages({ title, subject, sources: cameraBlobs });
   } catch (err) {
     console.error(err);
     $("#addStatus") && ($("#addStatus").textContent = `失敗：${err.message || err}`);
@@ -1199,7 +1355,8 @@ function hitTestMaskEdit(sx, sy){
   const nx = w.x / editPage.width;
   const ny = w.y / editPage.height;
 
-  const masks = cache.masks.filter((m) => m.printId === state.currentPrintId);
+  const gMap2 = new Map(cache.groups.filter(g => g.printId === state.currentPrintId).map(g => [g.id, g]));
+  const masks = cache.masks.filter((m) => m.printId === state.currentPrintId && (gMap2.get(m.groupId)?.pageIndex ?? 0) === editPage.pageIndex);
   for (let i = masks.length - 1; i >= 0; i--) {
     const m = masks[i];
     if (nx >= m.x && nx <= m.x + m.w && ny >= m.y && ny <= m.y + m.h) return m;
@@ -1230,18 +1387,13 @@ function drawEdit(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
   const gMap = new Map(cache.groups.map(g => [g.id, g]));
-  const allowGroupIds = new Set(
-    cache.groups
-      .filter(g => g.printId === state.currentPrintId && g.pageIndex === state.editPageIndex)
-      .map(g => g.id)
-  );
 
   ctx.save();
   ctx.translate(state.panX, state.panY);
   ctx.scale(state.zoom, state.zoom);
   ctx.drawImage(editImgBitmap, 0, 0);
 
-  const masks = cache.masks.filter((m) => m.printId === state.currentPrintId && allowGroupIds.has(m.groupId));
+  const masks = cache.masks.filter((m) => m.printId === state.currentPrintId && (gMap.get(m.groupId)?.pageIndex ?? 0) === editPage.pageIndex);
   masks.forEach((m) => {
     const isCur = m.groupId === state.currentGroupId;
     const isSel = state.selectedMaskIds.has(m.id);
@@ -1294,37 +1446,54 @@ async function ensureEditLoaded(){
   if (!state.currentPrintId) throw new Error("printIdがありません");
   await refreshCache();
 
+  // 現在のQが属するページを優先して開く
+  const curG = cache.groups.find((g) => g.id === state.currentGroupId);
+  const targetIndex = (typeof curG?.pageIndex === "number") ? curG.pageIndex : (state.editPageIndex || 0);
+  state.editPageIndex = targetIndex;
+
+  await loadEditPage(state.editPageIndex);
+
+  const groups = cache.groups.filter((g) => g.printId === state.currentPrintId).sort((a,b)=>a.orderIndex-b.orderIndex);
+  if (!groups[0]) {
+    await createGroup(); // 現在ページにQを作る
+    await refreshCache();
+  }
+  const groups2 = cache.groups.filter((g) => g.printId === state.currentPrintId).sort((a,b)=>a.orderIndex-b.orderIndex);
+  if (!state.currentGroupId) {
+    // 現在ページの最初のQを選ぶ（なければ全体先頭）
+    const onPage = groups2.find(g => g.pageIndex === state.editPageIndex) || groups2[0];
+    state.currentGroupId = onPage?.id || null;
+  } else {
+    // currentGroupId が別ページなら、ページ側に合わせる
+    const g2 = cache.groups.find(g => g.id === state.currentGroupId);
+    if (g2 && typeof g2.pageIndex === "number" && g2.pageIndex !== state.editPageIndex){
+      state.editPageIndex = g2.pageIndex;
+      await loadEditPage(state.editPageIndex);
+    }
+  }
+}
+
+
+async function loadEditPage(pageIndex){
+  await refreshCache();
   const pages = cache.pages.filter((p) => p.printId === state.currentPrintId).sort((a,b)=>a.pageIndex-b.pageIndex);
-  if (!pages[0]) throw new Error("ページが見つかりません");
+  const maxIdx = pages.length ? pages[pages.length-1].pageIndex : 0;
+  const idx = clamp(pageIndex, 0, maxIdx);
+  state.editPageIndex = idx;
 
-  // 存在しないpageIndexに居たら0へ
-  if (state.editPageIndex < 0 || state.editPageIndex >= pages.length) state.editPageIndex = 0;
-
-  editPage = pages.find((p) => p.pageIndex === state.editPageIndex) || pages[0];
+  editPage = cache.pages.find((p) => p.printId === state.currentPrintId && p.pageIndex === idx);
   if (!editPage) throw new Error("ページが見つかりません");
   editImgBitmap = await createImageBitmap(editPage.image);
 
-  // このページにグループが無ければ作成
-  const groups = cache.groups
-    .filter((g) => g.printId === state.currentPrintId && g.pageIndex === editPage.pageIndex)
-    .sort((a,b)=>a.orderIndex-b.orderIndex);
-  if (!groups[0]) {
-    await createGroup();
-    await refreshCache();
-  }
-  const groups2 = cache.groups
-    .filter((g) => g.printId === state.currentPrintId && g.pageIndex === editPage.pageIndex)
-    .sort((a,b)=>a.orderIndex-b.orderIndex);
-  if (!state.currentGroupId || !groups2.some(g => g.id === state.currentGroupId)) {
-    state.currentGroupId = groups2[0]?.id || null;
-  }
-
-  // ページUI
-  $("#pageTotal") && ($("#pageTotal").textContent = String(pages.length));
-  $("#pageNow") && ($("#pageNow").textContent = String(editPage.pageIndex + 1));
-  $("#btnPrevPage") && ($("#btnPrevPage").disabled = editPage.pageIndex <= 0);
-  $("#btnNextPage") && ($("#btnNextPage").disabled = editPage.pageIndex >= pages.length - 1);
+  // UI
+  const label = $("#editPageLabel");
+  if (label) label.textContent = String(idx + 1) + (pages.length ? ` / ${pages.length}` : "");
+  const nav = $("#editPageNav");
+  if (nav) nav.classList.toggle("hidden", pages.length <= 1);
+  $("#btnEditPrevPage") && ($("#btnEditPrevPage").disabled = (idx <= 0));
+  $("#btnEditNextPage") && ($("#btnEditNextPage").disabled = (pages.length <= 1 || idx >= pages.length-1));
 }
+
 
 async function renderEdit(){
   await ensureEditLoaded();
@@ -1348,9 +1517,7 @@ async function renderEdit(){
 async function renderEditSidebar(){
   await refreshCache();
   const printId = state.currentPrintId;
-  const groups = cache.groups
-    .filter((g) => g.printId === printId && g.pageIndex === state.editPageIndex)
-    .sort((a,b)=>a.orderIndex-b.orderIndex);
+  const groups = cache.groups.filter((g) => g.printId === printId).sort((a,b)=>a.orderIndex-b.orderIndex);
   const masks = cache.masks.filter((m) => m.printId === printId);
 
   const list = $("#groupList");
@@ -1379,12 +1546,22 @@ async function renderEditSidebar(){
       </div>
     `;
 
-    el.querySelector("[data-sel-group]")?.addEventListener("click", () => {
+    el.querySelector("[data-sel-group]")?.addEventListener("click", async () => {
       state.currentGroupId = g.id;
       state.selectedMaskIds.clear();
       updateSelUI();
-      renderEditSidebar();
-      drawEdit();
+
+      // ページが違う場合は切り替える
+      if (typeof g.pageIndex === "number" && g.pageIndex !== (state.editPageIndex || 0)) {
+        try{
+          await loadEditPage(g.pageIndex);
+          // ページ切替後はフィット
+          requestAnimationFrame(()=>{ fitToStage("#stage", canvas, editPage); drawEdit(); });
+        }catch(e){ console.error(e); }
+      } else {
+        drawEdit();
+      }
+      await renderEditSidebar();
     });
     el.querySelector("[data-q-up]")?.addEventListener("click", async () => { await moveGroupOrder(g.id, -1); });
     el.querySelector("[data-q-down]")?.addEventListener("click", async () => { await moveGroupOrder(g.id, +1); });
@@ -1403,9 +1580,7 @@ async function renderEditSidebar(){
 async function moveGroupOrder(groupId, delta){
   await refreshCache();
   const printId = state.currentPrintId;
-  const groups = cache.groups
-    .filter((g) => g.printId === printId && g.pageIndex === state.editPageIndex)
-    .sort((a,b)=>a.orderIndex-b.orderIndex);
+  const groups = cache.groups.filter((g) => g.printId === printId).sort((a,b)=>a.orderIndex-b.orderIndex);
   const i = groups.findIndex((g) => g.id === groupId);
   if (i < 0) return;
   const j = i + delta;
@@ -1431,13 +1606,11 @@ function updateSelUI(){
 
 async function createGroup(){
   const printId = state.currentPrintId;
-  const groups = cache.groups
-    .filter((g) => g.printId === printId && g.pageIndex === state.editPageIndex)
-    .sort((a,b)=>a.orderIndex-b.orderIndex);
+  const groups = cache.groups.filter((g) => g.printId === printId).sort((a,b)=>a.orderIndex-b.orderIndex);
   const idx = groups.length;
   const groupId = uid();
   const t = now();
-  const g = { id: groupId, printId, pageIndex: state.editPageIndex, label: `Q${idx + 1}`, orderIndex: idx, isActive: true, createdAt: t };
+  const g = { id: groupId, printId, pageIndex: state.editPageIndex || 0, label: `Q${idx + 1}`, orderIndex: idx, isActive: true, createdAt: t };
   await tx(["groups","srs"], "readwrite", (s) => {
     s.groups.put(g);
     s.srs.put(initSrsState(groupId));
@@ -1499,25 +1672,38 @@ function updateEditHeaderClickable(){
   if (metaEl) metaEl.onclick = () => changeCurrentSubjectSheet();
 }
 
+
+$("#btnEditPrevPage")?.addEventListener("click", async () => {
+  try{
+    await loadEditPage((state.editPageIndex || 0) - 1);
+    // 現在ページの最初のQへ寄せる
+    await refreshCache();
+    const gs = cache.groups.filter(g => g.printId === state.currentPrintId).sort((a,b)=>a.orderIndex-b.orderIndex);
+    const onPage = gs.find(g => g.pageIndex === state.editPageIndex) || gs[0];
+    if (onPage) state.currentGroupId = onPage.id;
+    state.selectedMaskIds.clear();
+    updateSelUI();
+    await renderEditSidebar();
+    requestAnimationFrame(()=>{ fitToStage("#stage", canvas, editPage); drawEdit(); });
+  }catch(e){ console.error(e); }
+});
+$("#btnEditNextPage")?.addEventListener("click", async () => {
+  try{
+    await loadEditPage((state.editPageIndex || 0) + 1);
+    await refreshCache();
+    const gs = cache.groups.filter(g => g.printId === state.currentPrintId).sort((a,b)=>a.orderIndex-b.orderIndex);
+    const onPage = gs.find(g => g.pageIndex === state.editPageIndex) || gs[0];
+    if (onPage) state.currentGroupId = onPage.id;
+    state.selectedMaskIds.clear();
+    updateSelUI();
+    await renderEditSidebar();
+    requestAnimationFrame(()=>{ fitToStage("#stage", canvas, editPage); drawEdit(); });
+  }catch(e){ console.error(e); }
+});
+
 $("#btnFit")?.addEventListener("click", () => { fitToStage("#stage", canvas, editPage); drawEdit(); });
 $("#btnZoomIn")?.addEventListener("click", () => { state.zoom = Math.min(6, state.zoom * 1.25); drawEdit(); });
 $("#btnZoomOut")?.addEventListener("click", () => { state.zoom = Math.max(0.2, state.zoom / 1.25); drawEdit(); });
-
-// 複数ページ（Pro）: 編集ページ切替
-$("#btnPrevPage")?.addEventListener("click", async () => {
-  if (state.editPageIndex <= 0) return;
-  state.editPageIndex--;
-  state.selectedMaskIds.clear();
-  await renderEdit();
-});
-$("#btnNextPage")?.addEventListener("click", async () => {
-  await refreshCache();
-  const pages = cache.pages.filter(p => p.printId === state.currentPrintId).sort((a,b)=>a.pageIndex-b.pageIndex);
-  if (state.editPageIndex >= pages.length - 1) return;
-  state.editPageIndex++;
-  state.selectedMaskIds.clear();
-  await renderEdit();
-});
 
 $("#btnNewGroup")?.addEventListener("click", async () => {
   await ensureEditLoaded();
@@ -1953,21 +2139,40 @@ $("#btnTodayFilter")?.addEventListener("click", async () => {
 });
 
 /* --- 任意学習：ピッカーでQ選択（HTMLの pickerModal を使う） --- */
+async function loadPickerPage(printId, pageIndex){
+  await refreshCache();
+  const pages = cache.pages.filter(p => p.printId === printId).sort((a,b)=>a.pageIndex-b.pageIndex);
+  if (!pages.length) { alert("ページが見つかりません"); return false; }
+
+  const idx = clamp(pageIndex, 0, pages.length - 1);
+  state.pickerPrintId = printId;
+  state.pickerPageIndex = idx;
+
+  pickerPage = pages[idx];
+  pickerBmp = await createImageBitmap(pickerPage.image);
+
+  // UI
+  const label = $("#pickerPageLabel");
+  if (label) label.textContent = String(idx + 1) + ` / ${pages.length}`;
+  const nav = $("#pickerPageNav");
+  if (nav) nav.classList.toggle("hidden", pages.length <= 1);
+  $("#btnPickerPrevPage") && ($("#btnPickerPrevPage").disabled = (idx <= 0));
+  $("#btnPickerNextPage") && ($("#btnPickerNextPage").disabled = (idx >= pages.length - 1));
+
+  // canvas fit
+  const stage = $("#pickerStage");
+  fitCanvasToStage(stage, pickerCanvas, pickerPage, vz.picker);
+  drawPicker();
+  return true;
+}
+
 async function openPracticePicker(printId){
   await refreshCache();
   const p = cache.prints.find(x => x.id === printId);
   if (!p) return;
 
-  const pages = cache.pages.filter(x => x.printId === printId).sort((a,b)=>a.pageIndex-b.pageIndex);
-  const page = pages[0];
-  if (!page) { alert("ページが見つかりません"); return; }
-
   const groups = cache.groups.filter(g => g.printId === printId && g.isActive).sort((a,b)=>a.orderIndex-b.orderIndex);
   if (groups.length === 0) { alert("このプリントにはQがありません（編集でQを作ってください）"); return; }
-
-  state.picker.pageIndex = 0;
-  pickerPage = page;
-  pickerBmp = await createImageBitmap(page.image);
 
   state.picker.open = true;
   state.picker.printId = printId;
@@ -1977,37 +2182,36 @@ async function openPracticePicker(printId){
 
   pickerModal?.classList.remove("hidden");
   pickerModal?.setAttribute("aria-hidden","false");
-  setModalOpen(true);
 
-  // ページUI
-  $("#pickerPageTotal") && ($("#pickerPageTotal").textContent = String(pages.length));
-  $("#pickerPageNow") && ($("#pickerPageNow").textContent = "1");
-  $("#btnPickerPrevPage") && ($("#btnPickerPrevPage").disabled = true);
-  $("#btnPickerNextPage") && ($("#btnPickerNextPage").disabled = pages.length <= 1);
-  $("#pickerPageNav") && ($("#pickerPageNav").style.display = pages.length > 1 ? "flex" : "none");
-
-  // canvas fit
-  const stage = $("#pickerStage");
-  fitCanvasToStage(stage, pickerCanvas, pickerPage, vz.picker);
-
-  drawPicker();
+  await loadPickerPage(printId, 0);
 }
+
+$("#btnPickerPrevPage")?.addEventListener("click", async () => {
+  if (!state.picker.open || !state.pickerPrintId) return;
+  await loadPickerPage(state.pickerPrintId, (state.pickerPageIndex || 0) - 1);
+});
+$("#btnPickerNextPage")?.addEventListener("click", async () => {
+  if (!state.picker.open || !state.pickerPrintId) return;
+  await loadPickerPage(state.pickerPrintId, (state.pickerPageIndex || 0) + 1);
+});
 
 function closePicker(){
   state.picker.open = false;
   pickerModal?.classList.add("hidden");
   pickerModal?.setAttribute("aria-hidden","true");
-  setModalOpen(false);
 }
+
+function closePickerAndClear(){
+  closePicker();
+  state.pickerPrintId = null;
+  state.pickerPageIndex = 0;
+}
+
 
 function drawPicker(){
   if (!pickerCtx || !pickerCanvas || !pickerPage || !pickerBmp) return;
-  const allowGroupIds = new Set(
-    cache.groups
-      .filter(g => g.printId === state.picker.printId && g.pageIndex === state.picker.pageIndex)
-      .map(g => g.id)
-  );
-  const masks = cache.masks.filter(m => m.printId === state.picker.printId && allowGroupIds.has(m.groupId));
+  const gMap = new Map(cache.groups.filter(g => g.printId === state.picker.printId).map(g => [g.id, g]));
+  const masks = cache.masks.filter(m => m.printId === state.picker.printId && (gMap.get(m.groupId)?.pageIndex ?? 0) === pickerPage.pageIndex);
   drawImageWithMasks(pickerCtx, pickerCanvas, pickerPage, pickerBmp, masks, null, vz.picker, {
     showLabels: true,
     selectedGroupIds: state.picker.selectedGroupIds
@@ -2023,12 +2227,7 @@ pickerCanvas?.addEventListener("click", async (e) => {
   const nx = w.x / pickerPage.width;
   const ny = w.y / pickerPage.height;
 
-  const allowGroupIds = new Set(
-    cache.groups
-      .filter(g => g.printId === state.picker.printId && g.pageIndex === state.picker.pageIndex)
-      .map(g => g.id)
-  );
-  const masks = cache.masks.filter(m => m.printId === state.picker.printId && allowGroupIds.has(m.groupId));
+  const masks = cache.masks.filter(m => m.printId === state.picker.printId);
   const hit = masks.find(m => nx >= m.x && nx <= m.x + m.w && ny >= m.y && ny <= m.y + m.h);
   if (!hit) return;
 
@@ -2042,37 +2241,6 @@ pickerCanvas?.addEventListener("click", async (e) => {
 });
 
 $("#pickerCancel")?.addEventListener("click", closePicker);
-
-// 複数ページ（Pro）: ピッカー内ページ切替
-$("#btnPickerPrevPage")?.addEventListener("click", async () => {
-  if (!state.picker.open) return;
-  await refreshCache();
-  const pages = cache.pages.filter(x => x.printId === state.picker.printId).sort((a,b)=>a.pageIndex-b.pageIndex);
-  if (state.picker.pageIndex <= 0) return;
-  state.picker.pageIndex--;
-  pickerPage = pages.find(p => p.pageIndex === state.picker.pageIndex) || pages[0];
-  pickerBmp = await createImageBitmap(pickerPage.image);
-  $("#pickerPageNow") && ($("#pickerPageNow").textContent = String(state.picker.pageIndex + 1));
-  $("#btnPickerPrevPage") && ($("#btnPickerPrevPage").disabled = state.picker.pageIndex <= 0);
-  $("#btnPickerNextPage") && ($("#btnPickerNextPage").disabled = state.picker.pageIndex >= pages.length - 1);
-  fitCanvasToStage($("#pickerStage"), pickerCanvas, pickerPage, vz.picker);
-  drawPicker();
-});
-$("#btnPickerNextPage")?.addEventListener("click", async () => {
-  if (!state.picker.open) return;
-  await refreshCache();
-  const pages = cache.pages.filter(x => x.printId === state.picker.printId).sort((a,b)=>a.pageIndex-b.pageIndex);
-  if (state.picker.pageIndex >= pages.length - 1) return;
-  state.picker.pageIndex++;
-  pickerPage = pages.find(p => p.pageIndex === state.picker.pageIndex) || pages[0];
-  pickerBmp = await createImageBitmap(pickerPage.image);
-  $("#pickerPageNow") && ($("#pickerPageNow").textContent = String(state.picker.pageIndex + 1));
-  $("#btnPickerPrevPage") && ($("#btnPickerPrevPage").disabled = state.picker.pageIndex <= 0);
-  $("#btnPickerNextPage") && ($("#btnPickerNextPage").disabled = state.picker.pageIndex >= pages.length - 1);
-  fitCanvasToStage($("#pickerStage"), pickerCanvas, pickerPage, vz.picker);
-  drawPicker();
-});
-
 $("#pickerStart")?.addEventListener("click", async () => {
   const ids = Array.from(state.picker.selectedGroupIds);
   if (ids.length === 0) return;
@@ -2146,7 +2314,6 @@ async function renderReview(){
     state.currentPrintId = p.id;
     state.currentGroupId = gid;
     state.selectedMaskIds.clear();
-    state.editPageIndex = g.pageIndex ?? 0;
     await nav("edit");
   }, { once:true });
 
@@ -2261,14 +2428,12 @@ const printSheetFoot = $("#printSheetFoot");
 function openPrintSheet(){
   printSheet?.classList.remove("hidden");
   printSheet?.setAttribute("aria-hidden","false");
-  setModalOpen(true);
 }
 function closePrintSheet(){
   printSheet?.classList.add("hidden");
   printSheet?.setAttribute("aria-hidden","true");
   state.print.mode = null;
   state.print.targets = [];
-  setModalOpen(false);
 }
 
 function setPrintButtonsUI(){
@@ -2352,47 +2517,37 @@ $("#btnBatchPrint")?.addEventListener("click", async () => {
   openPrintSheet();
 });
 
-async function renderMaskedDataUrlsForPrint(printId){
+async function renderMaskedDataUrlForPrint(printId){
   await refreshCache();
-  const pages = cache.pages.filter(p => p.printId === printId).sort((a,b)=>a.pageIndex-b.pageIndex);
-  if (!pages[0]) throw new Error("ページが見つかりません");
+  const page = cache.pages.find(p => p.printId === printId && p.pageIndex === 0);
+  if (!page) throw new Error("ページが見つかりません");
+  const bitmap = await createImageBitmap(page.image);
 
-  const allGroups = cache.groups.filter(g => g.printId === printId);
-  const gPageMap = new Map(allGroups.map(g => [g.id, g.pageIndex ?? 0]));
-  const allMasks = cache.masks.filter(m => m.printId === printId);
+  const off = document.createElement("canvas");
+  off.width = page.width;
+  off.height = page.height;
+  const octx = off.getContext("2d");
+  octx.drawImage(bitmap, 0, 0);
 
-  const out = [];
-  for (const page of pages){
-    const bitmap = await createImageBitmap(page.image);
-    const off = document.createElement("canvas");
-    off.width = page.width;
-    off.height = page.height;
-    const octx = off.getContext("2d");
-    octx.drawImage(bitmap, 0, 0);
+  const masks = cache.masks.filter(m => m.printId === printId);
+  masks.forEach(m => {
+    octx.fillStyle = "#000";
+    octx.fillRect(
+      m.x * page.width,
+      m.y * page.height,
+      m.w * page.width,
+      m.h * page.height
+    );
+  });
 
-    const masks = allMasks.filter(m => (gPageMap.get(m.groupId) ?? 0) === page.pageIndex);
-    masks.forEach(m => {
-      octx.fillStyle = "#000";
-      octx.fillRect(
-        m.x * page.width,
-        m.y * page.height,
-        m.w * page.width,
-        m.h * page.height
-      );
-    });
-
-    out.push({ pageIndex: page.pageIndex, dataUrl: off.toDataURL("image/jpeg", 0.92) });
-  }
-
-  return out;
+  return off.toDataURL("image/jpeg", 0.92);
 }
 
 function buildPrintHtml(pages, opt){
   const safe = pages.map(p => ({
     title: escapeHtml(p.title),
     subject: escapeHtml(p.subject),
-    dataUrl: p.dataUrl,
-    pageLabel: escapeHtml(p.pageLabel || "")
+    dataUrl: p.dataUrl
   }));
   const paper = opt?.paper || "A4";
   const orientation = opt?.orientation || "portrait";
@@ -2420,7 +2575,7 @@ function buildPrintHtml(pages, opt){
     <section class="page">
       <div class="meta">
         <div class="t">${p.title}</div>
-        <div class="s">${p.subject}${p.pageLabel ? " / " + p.pageLabel : ""}</div>
+        <div class="s">${p.subject}</div>
       </div>
       <div class="sheet">
         <div class="sheetInner">
@@ -2557,16 +2712,8 @@ $("#printSheetDo")?.addEventListener("click", async () => {
 
     const pages = [];
     for (const p of targets) {
-      const dataUrls = await renderMaskedDataUrlsForPrint(p.id);
-      const total = dataUrls.length;
-      dataUrls.forEach((x, i) => {
-        pages.push({
-          title: p.title,
-          subject: normSubject(p.subject),
-          pageLabel: total > 1 ? `Page ${i + 1}/${total}` : "",
-          dataUrl: x.dataUrl
-        });
-      });
+      const dataUrl = await renderMaskedDataUrlForPrint(p.id);
+      pages.push({ title: p.title, subject: normSubject(p.subject), dataUrl });
     }
 
     const html = buildPrintHtml(pages, {
