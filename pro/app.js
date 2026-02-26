@@ -103,6 +103,20 @@ function escapeHtml(s) {
     "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
   }[m]));
 }
+function escapeAttr(s){
+  // attribute value escape (same policy as HTML)
+  return escapeHtml(s);
+}
+
+function safeEscapeAttr(s){
+  // Use escapeAttr if available; otherwise fall back to minimal escaping.
+  try{
+    if (typeof escapeAttr === "function") return safeEscapeAttr(s);
+  }catch(e){}
+  return String(s).replace(/[&<>"']/g, (m)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+}
+
+
 function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
 function clamp01(v){ return clamp(v, 0, 1); }
 function toDateStr(ms){ return new Date(ms).toLocaleString(); }
@@ -434,7 +448,7 @@ function subjectClass(s){
 
 /* ========= IndexedDB ========= */
 const DB_NAME = "print_srs_lite_pro_db";
-const DB_VER = 3;
+const DB_VER = 4;
 let dbp = null;
 
 function openDB(){
@@ -584,7 +598,6 @@ const state = {
   route: "home",
   currentPrintId: null,
   currentGroupId: null,
-  currentPageIndex: 0,
   selectedMaskIds: new Set(),
   selectedPrintIds: new Set(),
 
@@ -1073,12 +1086,12 @@ async function renderHomeFilters(){
   // fill selects
   if (folderSel) {
     const folders = await listFolders();
-    folderSel.innerHTML = `<option value="ALL">すべてのフォルダ</option>` + folders.map(f=>`<option value="${escapeAttr(f.id)}">${escapeHtml(f.name)}</option>`).join("");
+    folderSel.innerHTML = `<option value="ALL">すべてのフォルダ</option>` + folders.map(f=>`<option value="${safeEscapeAttr(f.id)}">${escapeHtml(f.name)}</option>`).join("");
     folderSel.value = state.homeFolderFilter || "ALL";
   }
   if (subjSel) {
     const subs = getAllSubjectsFromPrints();
-    subjSel.innerHTML = `<option value="ALL">すべての教科</option>` + subs.map(s=>`<option value="${escapeAttr(s)}">${escapeHtml(s)}</option>`).join("");
+    subjSel.innerHTML = `<option value="ALL">すべての教科</option>` + subs.map(s=>`<option value="${safeEscapeAttr(s)}">${escapeHtml(s)}</option>`).join("");
     subjSel.value = state.homeSubjectFilter || "ALL";
   }
   if (search) search.value = state.homeSearch || "";
@@ -1244,7 +1257,7 @@ async function renderAdd(){
   const sel = $("#addFolder");
   if (sel) {
     const folders = await listFolders();
-    sel.innerHTML = folders.map(f=>`<option value="${escapeAttr(f.id)}">${escapeHtml(f.name)}</option>`).join("");
+    sel.innerHTML = folders.map(f=>`<option value="${safeEscapeAttr(f.id)}">${escapeHtml(f.name)}</option>`).join("");
     sel.value = FOLDER_DEFAULT_ID;
   }
 
@@ -1432,58 +1445,17 @@ async function ensureEditLoaded(){
   if (!state.currentPrintId) throw new Error("printIdがありません");
   await refreshCache();
 
-  // 現在ページ（複数ページ対応）
-  const allPages = cache.pages.filter((p)=> p.printId === state.currentPrintId).sort((a,b)=>a.pageIndex-b.pageIndex);
-  if (!allPages[0]) throw new Error("ページが見つかりません");
-
-  if (state.currentPageIndex == null) state.currentPageIndex = 0;
-  state.currentPageIndex = Math.max(0, Math.min(state.currentPageIndex, allPages.length - 1));
-
-  editPage = allPages.find((p) => p.pageIndex === state.currentPageIndex) || allPages[0];
-  state.currentPageIndex = editPage.pageIndex;
-
+  editPage = cache.pages.find((p) => p.printId === state.currentPrintId && p.pageIndex === 0);
+  if (!editPage) throw new Error("ページが見つかりません");
   editImgBitmap = await createImageBitmap(editPage.image);
 
-  const groups = cache.groups
-    .filter((g) => g.printId === state.currentPrintId && (g.pageIndex ?? 0) === state.currentPageIndex)
-    .sort((a,b)=>a.orderIndex-b.orderIndex);
+  const groups = cache.groups.filter((g) => g.printId === state.currentPrintId).sort((a,b)=>a.orderIndex-b.orderIndex);
   if (!groups[0]) {
     await createGroup();
     await refreshCache();
   }
-  const groups2 = cache.groups.filter((g) => g.printId === state.currentPrintId && (g.pageIndex ?? 0) === state.currentPageIndex).sort((a,b)=>a.orderIndex-b.orderIndex);
+  const groups2 = cache.groups.filter((g) => g.printId === state.currentPrintId).sort((a,b)=>a.orderIndex-b.orderIndex);
   if (!state.currentGroupId) state.currentGroupId = groups2[0]?.id || null;
-}
-
-
-function renderPageTabs(){
-  const el = $("#pageTabs");
-  if (!el) return;
-
-  const pages = cache.pages.filter(p=>p.printId === state.currentPrintId).sort((a,b)=>a.pageIndex-b.pageIndex);
-  if (pages.length <= 1){ el.innerHTML = ""; return; }
-
-  el.innerHTML = pages.map(p=>{
-    const active = (p.pageIndex === (state.currentPageIndex||0)) ? "active" : "";
-    return `<button class="ptab ${active}" data-page-tab="${p.pageIndex}">ページ ${p.pageIndex+1}/${pages.length}</button>`;
-  }).join("");
-
-  el.querySelectorAll("[data-page-tab]").forEach(btn=>{
-    btn.addEventListener("click", async ()=>{
-      const pi = parseInt(btn.getAttribute("data-page-tab"),10);
-      if (Number.isNaN(pi)) return;
-      state.currentPageIndex = pi;
-
-      await refreshCache();
-      const gg = cache.groups.filter(g=>g.printId===state.currentPrintId && (g.pageIndex??0)===pi).sort((a,b)=>a.orderIndex-b.orderIndex);
-      state.currentGroupId = gg[0]?.id || null;
-
-      await ensureEditLoaded();
-      await renderEditSidebar();
-      renderPageTabs();
-      requestAnimationFrame(()=>{ fitToStage("#stage", canvas, editPage); drawEdit(); });
-    });
-  });
 }
 
 async function renderEdit(){
@@ -1494,7 +1466,6 @@ async function renderEdit(){
 
   await refreshCache();
   updateEditHeaderClickable();
-  renderPageTabs();
 
   await renderEditSidebar();
   state.selectedMaskIds.clear();
@@ -1509,9 +1480,8 @@ async function renderEdit(){
 async function renderEditSidebar(){
   await refreshCache();
   const printId = state.currentPrintId;
-  const pageIdx = state.currentPageIndex || 0;
-  const groups = cache.groups.filter((g) => g.printId === printId && (g.pageIndex ?? 0) === pageIdx).sort((a,b)=>a.orderIndex-b.orderIndex);
-  const masks = cache.masks.filter((m) => m.printId === printId && (m.pageIndex ?? 0) === pageIdx);
+  const groups = cache.groups.filter((g) => g.printId === printId).sort((a,b)=>a.orderIndex-b.orderIndex);
+  const masks = cache.masks.filter((m) => m.printId === printId);
 
   const list = $("#groupList");
   if (!list) return;
@@ -1589,12 +1559,11 @@ function updateSelUI(){
 
 async function createGroup(){
   const printId = state.currentPrintId;
-  const pageIdx = state.currentPageIndex || 0;
-  const groups = cache.groups.filter((g) => g.printId === printId && (g.pageIndex ?? 0) === pageIdx).sort((a,b)=>a.orderIndex-b.orderIndex);
+  const groups = cache.groups.filter((g) => g.printId === printId).sort((a,b)=>a.orderIndex-b.orderIndex);
   const idx = groups.length;
   const groupId = uid();
   const t = now();
-  const g = { id: groupId, printId, pageIndex: pageIdx, label: `Q${idx + 1}`, orderIndex: idx, isActive: true, createdAt: t };
+  const g = { id: groupId, printId, pageIndex: 0, label: `Q${idx + 1}`, orderIndex: idx, isActive: true, createdAt: t };
   await tx(["groups","srs"], "readwrite", (s) => {
     s.groups.put(g);
     s.srs.put(initSrsState(groupId));
@@ -1739,7 +1708,7 @@ $("#btnDeleteGroup")?.addEventListener("click", async () => {
   state.selectedMaskIds.clear();
   await refreshCache();
 
-  const gg = cache.groups.filter((x) => x.printId === state.currentPrintId && (x.pageIndex ?? 0) === (state.currentPageIndex||0)).sort((a,b)=>a.orderIndex-b.orderIndex);
+  const gg = cache.groups.filter((x) => x.printId === state.currentPrintId).sort((a,b)=>a.orderIndex-b.orderIndex);
   state.currentGroupId = gg[0]?.id || null;
 
   await renderEditSidebar();
@@ -1925,7 +1894,7 @@ canvas?.addEventListener("pointerup", async (e) => {
     id: uid(),
     groupId: state.currentGroupId,
     printId: state.currentPrintId,
-    pageIndex: (state.currentPageIndex || 0),
+    pageIndex: 0,
     x: clamp(nx, 0, 1),
     y: clamp(ny, 0, 1),
     w: clamp(nw, 0.0005, 1),
@@ -2237,7 +2206,7 @@ async function ensureReviewLoaded(groupId){
   await refreshCache();
   const g = cache.groups.find(x => x.id === groupId);
   const p = cache.prints.find(x => x.id === g?.printId);
-  const page = cache.pages.find(x => x.printId === g?.printId && x.pageIndex === (g?.pageIndex ?? 0));
+  const page = cache.pages.find(x => x.printId === g?.printId && x.pageIndex === 0);
   if (!g || !p || !page) throw new Error("review data missing");
   reviewPage = page;
   reviewBmp = await createImageBitmap(page.image);
@@ -2764,7 +2733,7 @@ $("#btnBackup")?.addEventListener("click", async () => {
     meta: {
       app: "Print SRS Lite Pro",
       exportedAt: now(),
-      version: "20260219-proprint",
+      version: "20260226-restore1",
       db: { name: DB_NAME, ver: DB_VER },
     },
     data: {
@@ -2885,8 +2854,8 @@ async function renderFolderModal(){
           <div class="muted small">${isDefault ? "既定（削除不可）" : `ID: ${escapeHtml(f.id)}`}</div>
         </div>
         <div class="row wrap">
-          <button class="btn" data-folder-rename="${escapeAttr(f.id)}" ${isDefault?"disabled":""}>名前変更</button>
-          <button class="btn danger" data-folder-del="${escapeAttr(f.id)}" ${isDefault?"disabled":""}>削除</button>
+          <button class="btn" data-folder-rename="${safeEscapeAttr(f.id)}" ${isDefault?"disabled":""}>名前変更</button>
+          <button class="btn danger" data-folder-del="${safeEscapeAttr(f.id)}" ${isDefault?"disabled":""}>削除</button>
         </div>
       </div>
     `;
@@ -3053,24 +3022,19 @@ async function createPrintFromBlobs(blobs, sourceLabel){
 
     const print = { id: printId, title, subject, folderId, createdAt: t };
 
-    // 複数ページの場合は「各ページにQ1」を自動で用意（後で追加可能）
-    const baseGroups = pages.map((pg) => {
-      const gid = uid();
-      return { id: gid, printId, pageIndex: pg.pageIndex, label: "Q1", orderIndex: 0, isActive: true, createdAt: t };
-    });
+    const groupId = uid();
+    const group = { id: groupId, printId, pageIndex: 0, label: "Q1", orderIndex: 0, isActive: true, createdAt: t };
+    const srs = initSrsState(groupId);
 
     await tx(["prints","pages","groups","srs"], "readwrite", (s) => {
       s.prints.put(print);
       pages.forEach(pg=>s.pages.put(pg));
-      baseGroups.forEach(g=> {
-        s.groups.put(g);
-        s.srs.put(initSrsState(g.id));
-      });
+      s.groups.put(group);
+      s.srs.put(srs);
     });
 
     state.currentPrintId = printId;
-    state.currentPageIndex = 0;
-    state.currentGroupId = baseGroups.find(g=>g.pageIndex===0)?.id || baseGroups[0]?.id || null;
+    state.currentGroupId = groupId;
     state.selectedMaskIds.clear();
 
     $("#addStatus") && ($("#addStatus").textContent = `追加しました（${pages.length}枚）。編集画面へ移動します…`);
