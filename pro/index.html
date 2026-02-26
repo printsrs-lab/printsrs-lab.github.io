@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Print SRS Lite Pro</title>
-  <link rel="stylesheet" href="./style.css?v=20260226-fix5" />
+  <link rel="stylesheet" href="./style.css" />
   <script src="https://cdn.jsdelivr.net/npm/heic2any/dist/heic2any.min.js"></script>
 </head>
 <body>
@@ -62,18 +62,6 @@
 
         <div class="muted small" id="proHintHome" style="margin-top:10px;"></div>
 
-        
-        <div class="row space wrap" style="margin-top:10px;">
-          <div class="row wrap grow">
-            <input id="homeSearch" type="text" placeholder="検索（タイトル / フォルダ）" class="uiInput" />
-            <select id="homeFolderFilter" class="uiSelect"></select>
-            <select id="homeSubjectFilter" class="uiSelect"></select>
-          </div>
-          <div class="row wrap">
-            <button id="btnManageFolders" class="btn">フォルダ管理</button>
-          </div>
-        </div>
-
         <div id="printList" class="list"></div>
       </div>
     </section>
@@ -95,20 +83,17 @@
             <div class="muted small">「その他」を選ぶと自由記載できます。</div>
           </label>
 
-          <label>フォルダ
+                    <label>画像の取り込み
             <div class="row wrap">
-              <select id="addFolder" class="uiSelect"></select>
-              <button id="btnNewFolderFromAdd" class="btn">＋新規フォルダ</button>
+              <button id="btnPickFiles" class="btn">ファイルから選ぶ <span class="badge pro">PROで複数OK</span></button>
+              <button id="btnCameraSingle" class="btn">写真を撮る（1枚）</button>
+              <button id="btnCameraMulti" class="btn">写真を連続撮影 <span class="badge pro">PRO</span></button>
             </div>
-            <div class="muted small">フォルダは任意で作れます（教科とは別の分類です）。</div>
-          </label>
+            <div class="muted small">※Proでは「ファイル複数選択」または「連続撮影」で、1回の操作で複数ページを同じプリント名に追加できます。</div>
 
-          <label>画像ファイル（JPEG/PNG/HEIC）
-            <input id="addFile" type="file" accept="image/*,.heic,.heif" />
-            <div class="row wrap" style="margin-top:8px;">
-              <button id="btnOpenCameraBurst" class="btn primary">📷 写真を連続撮影して取り込む（Pro）</button>
-              <div class="muted small">※通常の「カメラで撮影」は端末仕様で1枚になることがあります。</div>
-            </div>
+            <!-- hidden pickers -->
+            <input id="addFile" type="file" accept="image/*,.heic,.heif" multiple class="hidden" />
+            <input id="addCamera" type="file" accept="image/*" capture="environment" class="hidden" />
           </label>
 
           <div class="row wrap">
@@ -185,6 +170,11 @@
             <div class="muted">
               現在のQ：<span id="currentGroupLabel">(未選択)</span>
               / このQのマスク数：<span id="currentGroupMaskCount">0</span>
+            </div>
+            <div class="row wrap" id="editPageNav">
+              <button id="btnEditPrevPage" class="btn">◀ ページ</button>
+              <div class="pill">Page <span id="editPageLabel">1</span></div>
+              <button id="btnEditNextPage" class="btn">ページ ▶</button>
             </div>
             <div class="row wrap">
               <button id="btnFit" class="btn">フィット</button>
@@ -279,7 +269,30 @@
       </section>
     </section>
 
-  </main>
+      <!-- CAMERA (Pro multi-shot) -->
+    <div id="cameraModal" class="modal hidden" aria-hidden="true">
+      <div class="modalCard">
+        <div class="row space wrap">
+          <div>
+            <div class="modalTitle">連続撮影（Pro）</div>
+            <div id="cameraSub" class="muted small">撮影した枚数：0</div>
+          </div>
+          <button id="btnCameraClose" class="btn">閉じる</button>
+        </div>
+
+        <div class="cameraStage">
+          <video id="cameraVideo" playsinline autoplay muted></video>
+        </div>
+
+        <div class="row space wrap">
+          <button id="btnCameraShot" class="btn primary">📸 追加で撮る</button>
+          <button id="btnCameraDone" class="btn done">✅ 取り込み</button>
+        </div>
+        <div id="cameraStatus" class="muted small"></div>
+      </div>
+    </div>
+
+</main>
 
   <!-- 教科選択シート（bottom sheet） -->
   <div id="subjectSheet" class="sheet hidden" aria-hidden="true">
@@ -349,13 +362,45 @@
   </div>
 
   <!-- 任意学習：Q選択ピッカー（プリント画像上で選択） -->
-  <div id="pickerModal" class="modal hidden" aria-hidden="true">
+  
+  <!-- Pro only notice (sheet) -->
+  <div id="proOnlySheet" class="sheet hidden" aria-hidden="true">
+    <div class="sheetBackdrop" id="proOnlyBackdrop"></div>
+    <div class="sheetBody">
+      <div class="row space wrap">
+        <div>
+          <div class="sheetTitle" id="proOnlyTitle">Pro限定</div>
+          <div class="muted small" id="proOnlySub">この機能はProのみです</div>
+        </div>
+        <button id="proOnlyClose" class="btn">閉じる</button>
+      </div>
+
+      <div class="divider"></div>
+      <div class="muted" id="proOnlyBody"></div>
+
+      <div class="divider"></div>
+      <div class="row wrap" style="justify-content:flex-end;">
+        <button id="proOnlyOk" class="btn primary">OK</button>
+      </div>
+
+      <div class="muted small" style="margin-top:10px;">
+        ※Proをご利用の方は、購入時に案内されたURL（/pro/?uid=XXXX）を開くと有効化されます。
+      </div>
+    </div>
+  </div>
+
+<div id="pickerModal" class="modal hidden" aria-hidden="true">
     <div class="modalBackdrop"></div>
     <div class="modalBody">
       <div class="row space wrap">
         <div>
           <div class="sheetTitle">学習するQを選択</div>
           <div class="muted small">黒塗り＋Qラベルを見ながら選択できます（複数OK）</div>
+          <div class="row wrap" id="pickerPageNav" style="margin-top:8px;">
+            <button id="btnPickerPrevPage" class="btn">◀ ページ</button>
+            <div class="pill">Page <span id="pickerPageLabel">1</span></div>
+            <button id="btnPickerNextPage" class="btn">ページ ▶</button>
+          </div>
         </div>
         <div class="pill">選択：<span id="pickerSelCount">0</span></div>
       </div>
@@ -476,75 +521,7 @@
   <!-- 印刷用iframe（ポップアップ回避） -->
   <iframe id="printFrame" class="hidden"></iframe>
 
-  <script src="./app.js?v=20260226-fix5"></script>
+  <script src="./app.js?v=20260219-proprint"></script>
 <script src="pro_uid_guard.js"></script>
-
-  <!-- Pro案内 / フォルダ管理 / 連続撮影 -->
-  <div id="proModal" class="modal hidden" aria-hidden="true">
-    <div class="modalBackdrop" data-close="pro"></div>
-    <div class="modalBody">
-      <div class="row space wrap">
-        <div>
-          <div class="sheetTitle" id="proModalTitle">Pro限定機能</div>
-          <div class="muted small" id="proModalSub">この機能はPro版で利用できます</div>
-        </div>
-      </div>
-      <div id="proModalBody" class="doc" style="margin-top:10px;"></div>
-      <div class="row space wrap" style="margin-top:12px;">
-        <div class="muted small">Proの方は購入時のURL（/pro/?uid=XXXX）で有効化</div>
-        <div class="row wrap">
-          <button class="btn" id="proModalClose">閉じる</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="folderModal" class="modal hidden" aria-hidden="true">
-    <div class="modalBackdrop" data-close="folder"></div>
-    <div class="modalBody">
-      <div class="row space wrap">
-        <div>
-          <div class="sheetTitle">フォルダ管理</div>
-          <div class="muted small">教科とは別に、任意の分類フォルダを作れます</div>
-        </div>
-      </div>
-
-      <div class="row wrap" style="margin-top:10px;">
-        <input id="newFolderName" type="text" class="uiInput" placeholder="新しいフォルダ名（例：ももか/かんた/宿題/テスト対策 など）" />
-        <button id="btnCreateFolder" class="btn primary">追加</button>
-      </div>
-
-      <div id="folderList" class="list" style="margin-top:10px;"></div>
-
-      <div class="row space wrap" style="margin-top:12px;">
-        <div class="muted small">削除してもプリントは「未分類」に戻ります</div>
-        <div class="row wrap">
-          <button class="btn" id="folderModalClose">閉じる</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="cameraModal" class="modal hidden" aria-hidden="true">
-    <div class="modalBackdrop" data-close="camera"></div>
-    <div class="modalBody modalBody--camera">
-      <div class="cameraTop">
-        <div class="cameraTitle">連続撮影（Pro）</div>
-        <div class="cameraBadge">撮影済み <span id="cameraCount">0</span> 枚</div>
-      </div>
-
-      <div class="cameraStage">
-        <video id="cameraVideo" playsinline autoplay muted></video>
-        <div class="cameraHint">明るい場所で、プリント全体が入るように撮影してください</div>
-      </div>
-
-      <div class="cameraActions">
-        <button id="btnCameraShot" class="btn primary cameraBtn">📸 追加で撮る</button>
-        <button id="btnCameraDone" class="btn done cameraBtn" disabled>✅ 取り込み</button>
-        <button id="btnCameraCancel" class="btn cameraBtn">閉じる</button>
-      </div>
-    </div>
-  </div>
-
 </body>
 </html>
